@@ -4,7 +4,6 @@ import os
 import asyncio
 import requests
 from aiogram import Bot, Dispatcher, types
-from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -391,8 +390,9 @@ async def process_admin_password(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+from aiogram.fsm.context import FSMContext
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
     users = load_users()
 
@@ -404,7 +404,8 @@ async def cmd_start(message: types.Message):
         )
     else:
         await message.answer("👋 Добро пожаловать! Пожалуйста, введите ваше имя и фамилию:")
-        await dp.storage.set_state(key=StorageKey(message.from_user.id), state=RegistrationStates.name)
+        await state.set_state(RegistrationStates.name)
+
 
 @dp.message(RegistrationStates.name)
 async def process_name(message: types.Message, state: FSMContext):
@@ -566,7 +567,7 @@ async def approve_event(callback_query: types.CallbackQuery):
             reply_markup=get_admin_panel()
         )
 
-#
+
 @dp.callback_query(lambda c: c.data.startswith("reject_event_"))
 async def reject_event(callback_query: types.CallbackQuery):
     await callback_query.answer()
