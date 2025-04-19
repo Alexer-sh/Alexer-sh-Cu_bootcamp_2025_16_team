@@ -102,6 +102,16 @@ def load_data(filename):
         logging.error(f"Ошибка декодирования JSON в файле {filename}")
         return [] if filename in [EVENTS_FILE, PENDING_EVENTS_FILE] else {}
 
+def get_event_context():
+    try:
+        with open(EVENTS_FILE, 'r', encoding='utf-8') as f:
+            events = json.load(f)
+            descriptions = [f"Название: {e.get('name','Без названия')}\nОписание: {e.get('description','Без описания')}" for e in events]
+            return "\n---\n".join(descriptions)
+    except Exception as e:
+        logging.error(f"Ошибка при загрузке мероприятий: {e}")
+        return ""
+
 
 def save_data(filename, data):
     """Универсальная функция сохранения данных в JSON файл."""
@@ -386,6 +396,7 @@ class EventRegistrationStates(StatesGroup):
 
 class AIConsultationStates(StatesGroup):
     conversation = State()
+    waiting_for_question = State()
 
 class EventEditStates(StatesGroup):
     event_idx = State()
@@ -581,6 +592,19 @@ async def process_my_event(callback_query: types.CallbackQuery):
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+@dp.callback_query(lambda c: c.data == "consult_ai")
+async def consult_ai_handler(callback_query: types.CallbackQuery, state: FSMContext):
+    await callback_query.answer()
+    await callback_query.message.answer("🧠 Напиши, что ты хочешь узнать, и AI подскажет мероприятие")
+    await state.set_state(AIConsultationStates.waiting_for_question)
+
+@dp.message(AIConsultationStates.waiting_for_question)
+async def process_ai_question(message: types.Message, state: FSMContext):
+    question = message.text.strip()
+    await message.answer("💬 Думаю... Подожди секунду...")
+    answer, _ = await get_ai_response(question)
+    await message.answer(f"🤖 {answer}")
+    await state.clear()
 
 
 # Обработчик нажатия на кнопку удаления (запрос подтверждения)
@@ -766,7 +790,8 @@ async def process_register_event(callback_query: types.CallbackQuery, state: FSM
 @dp.message(EventRegistrationStates.name)
 async def process_event_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
-    await message.answer("📋 Введите описание мероприятия:")
+    await message.answer("📋 Введите описание мероприятия:",
+                         reply_markup=get_cancel_keyboard())
     await state.set_state(EventRegistrationStates.description)
 
 
